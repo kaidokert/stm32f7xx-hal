@@ -40,7 +40,9 @@ fn copy_memory_config(target: Target) -> Result<(), Error> {
     File::create(out_dir.join("memory.x"))?.write_all(memory_x)?;
 
     // Tell Cargo where to find the file.
-    println!("cargo:rustc-link-search={}", out_dir.display());
+    // Applications may supply their own `memory.x`, notably when linked into
+    // a bootloader slot at a nonzero flash origin. Do not export this generic
+    // generated script into dependent linker search paths.
 
     println!("cargo:rerun-if-changed=memory_1024_320.x");
     println!("cargo:rerun-if-changed=memory_2048_368.x");
