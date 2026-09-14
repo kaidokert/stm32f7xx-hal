@@ -1227,6 +1227,40 @@ pub struct Clocks {
 }
 
 impl Clocks {
+    /// Build a frozen-clock token for hardware initialized by an earlier boot
+    /// stage.
+    ///
+    /// This is intended for a verified boot handoff where stage-0 owns the
+    /// clock-tree transaction, while a later image needs the normal HAL clock
+    /// metadata without resetting RCC/FLASH/PWR while it may be executing from
+    /// external memory.  Every supplied frequency must describe the active
+    /// hardware clock tree.
+    pub const fn from_raw(
+        hclk: Hertz,
+        pclk1: Hertz,
+        pclk2: Hertz,
+        sysclk: Hertz,
+        timclk1: Hertz,
+        timclk2: Hertz,
+        pll48clk_valid: bool,
+        hse: Option<Hertz>,
+        lse: Option<Hertz>,
+        lsi: Option<Hertz>,
+    ) -> Self {
+        Self {
+            hclk,
+            pclk1,
+            pclk2,
+            sysclk,
+            timclk1,
+            timclk2,
+            pll48clk_valid,
+            hse,
+            lse,
+            lsi,
+        }
+    }
+
     /// Returns the frequency of the AHB1
     pub fn hclk(&self) -> Hertz {
         self.hclk
