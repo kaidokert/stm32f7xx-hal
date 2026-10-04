@@ -248,12 +248,12 @@ macro_rules! adc_hal {
             }
 
             #[inline(always)]
-            pub fn set_external_trigger(&mut self, trigger: crate::pac::adc1::cr2::EXTSEL_A) {
-                self.rb.cr2.modify(|_, w| w.extsel().variant(trigger))
+            pub fn set_external_trigger(&mut self, trigger: crate::pac::adc1::cr2::EXTSEL) {
+                self.rb.cr2().modify(|_, w| w.extsel().variant(trigger));
             }
 
             fn power_up(&mut self) {
-                self.rb.cr2.modify(|_, w| w.adon().set_bit());
+                self.rb.cr2().modify(|_, w| w.adon().set_bit());
 
                 // The reference manual says that a stabilization time is needed after power_up,
                 // this time can be found in the datasheets.
@@ -263,7 +263,7 @@ macro_rules! adc_hal {
 
             // 15.3.1 ADC on-off control
             fn power_down(&mut self) {
-                self.rb.cr2.modify(|_, w| w.adon().clear_bit());
+                self.rb.cr2().modify(|_, w| w.adon().clear_bit());
             }
 
             // 15.3.5 Single conversion mode (page: 444)
@@ -272,34 +272,44 @@ macro_rules! adc_hal {
             // SWSTART: Start conversion of regular channels
             fn setup_oneshot(&mut self) {
                 self.rb
-                    .cr2
+                    .cr2()
                     .modify(|_, w| w.cont().clear_bit().swstart().set_bit());
 
                 // SCAN: Scan mode
                 // DISCEN: Discontinuous mode on regular channels
                 self.rb
-                    .cr1
+                    .cr1()
                     .modify(|_, w| w.scan().clear_bit().discen().set_bit());
 
                 // ADC regular sequence register
                 // The total number of conversions in the regular group must be written in the L[3:0] bits in the ADC_SQR1 register. (15.3.4 page:444)
-                self.rb.sqr1.modify(|_, w| w.l().bits(0b0));
+                self.rb.sqr1().modify(|_, w| unsafe { w.l().bits(0b0) });
             }
 
             /// setup the ADC Resolution : Bits 25:24 RES[1:0]
             fn resolution(&mut self, resol_bits: u8) {
                 match resol_bits {
-                    12 => self.rb.cr1.modify(|_, w| w.res().bits(0b00)),
-                    10 => self.rb.cr1.modify(|_, w| w.res().bits(0b01)),
-                    8 => self.rb.cr1.modify(|_, w| w.res().bits(0b10)),
-                    6 => self.rb.cr1.modify(|_, w| w.res().bits(0b11)),
-                    _ => self.rb.cr1.modify(|_, w| w.res().bits(0b00)),
+                    12 => {
+                        self.rb.cr1().modify(|_, w| unsafe { w.res().bits(0b00) });
+                    }
+                    10 => {
+                        self.rb.cr1().modify(|_, w| unsafe { w.res().bits(0b01) });
+                    }
+                    8 => {
+                        self.rb.cr1().modify(|_, w| unsafe { w.res().bits(0b10) });
+                    }
+                    6 => {
+                        self.rb.cr1().modify(|_, w| unsafe { w.res().bits(0b11) });
+                    }
+                    _ => {
+                        self.rb.cr1().modify(|_, w| unsafe { w.res().bits(0b00) });
+                    }
                 }
             }
 
             // See : ADC sample time registers (page: 474)
             fn set_channel_sample_time(&mut self, chan: u8, sample_time: SampleTime) {
-                self.rb.smpr2.modify(|r, w| unsafe {
+                self.rb.smpr2().modify(|r, w| unsafe {
                     w.bits((r.bits() & !0x07) | ((sample_time as u32) & 0x07))
                 });
                 match chan {
@@ -307,12 +317,12 @@ macro_rules! adc_hal {
                         // 3 first bits (we keep other bits) : SMP0[2:0]
 
                         // SMPchan[2:0]
-                        self.rb.smpr2.modify(|r, w| unsafe {
+                        self.rb.smpr2().modify(|r, w| unsafe {
                             w.bits(
                                 (r.bits() & !(0x07 << (chan * 3)))
                                     | (((sample_time as u32) & 0x07) << (chan * 3)),
                             )
-                        })
+                        });
                     }
 
                     //////////////  SMPR1
@@ -320,12 +330,12 @@ macro_rules! adc_hal {
                         // 3 first bits (we keep other bits) : SMP10[2:0]
 
                         // SMPchan[2:0]
-                        self.rb.smpr1.modify(|r, w| unsafe {
+                        self.rb.smpr1().modify(|r, w| unsafe {
                             w.bits(
                                 (r.bits() & !(0x07 << ((chan - 10) * 3)))
                                     | (((sample_time as u32) & 0x07) << ((chan - 10) * 3)),
                             )
-                        })
+                        });
                     }
 
                     _ => unreachable!(),
@@ -341,7 +351,7 @@ macro_rules! adc_hal {
                     .take(6)
                     .enumerate()
                     .fold(0u32, |s, (i, c)| s | ((*c as u32) << (i * 5)));
-                self.rb.sqr3.write(|w| unsafe { w.bits(bits) });
+                self.rb.sqr3().write(|w| unsafe { w.bits(bits) });
                 if len > 6 {
                     let bits = channels
                         .iter()
@@ -349,7 +359,7 @@ macro_rules! adc_hal {
                         .take(6)
                         .enumerate()
                         .fold(0u32, |s, (i, c)| s | ((*c as u32) << (i * 5)));
-                    self.rb.sqr2.write(|w| unsafe { w.bits(bits) });
+                    self.rb.sqr2().write(|w| unsafe { w.bits(bits) });
                 }
                 if len > 12 {
                     let bits = channels
@@ -358,18 +368,20 @@ macro_rules! adc_hal {
                         .take(4)
                         .enumerate()
                         .fold(0u32, |s, (i, c)| s | ((*c as u32) << (i * 5)));
-                    self.rb.sqr1.write(|w| unsafe { w.bits(bits) });
+                    self.rb.sqr1().write(|w| unsafe { w.bits(bits) });
                 }
-                self.rb.sqr1.modify(|_, w| w.l().bits((len - 1) as u8));
+                self.rb
+                    .sqr1()
+                    .modify(|_, w| unsafe { w.l().bits((len - 1) as u8) });
             }
 
             fn set_continuous_mode(&mut self, continuous: bool) {
-                self.rb.cr2.modify(|_, w| w.cont().bit(continuous));
+                self.rb.cr2().modify(|_, w| w.cont().bit(continuous));
             }
 
             fn set_discontinuous_mode(&mut self, channels_count: Option<u8>) {
-                self.rb.cr1.modify(|_, w| match channels_count {
-                    Some(count) => w.discen().set_bit().discnum().bits(count),
+                self.rb.cr1().modify(|_, w| match channels_count {
+                    Some(count) => unsafe { w.discen().set_bit().discnum().bits(count) },
                     None => w.discen().clear_bit(),
                 });
             }
@@ -391,20 +403,20 @@ macro_rules! adc_hal {
                 // Dummy read in case something accidentally triggered
                 // a conversion by writing to CR2 without changing any
                 // of the bits
-                self.rb.dr.read().data().bits();
+                self.rb.dr().read().data().bits();
 
                 self.set_channel_sample_time(chan, self.sample_time);
-                self.rb.sqr3.modify(|_, w| unsafe { w.sq1().bits(chan) });
+                self.rb.sqr3().modify(|_, w| unsafe { w.sq1().bits(chan) });
 
                 // ADC start conversion of regular sequence
                 self.rb
-                    .cr2
+                    .cr2()
                     .modify(|_, w| w.swstart().set_bit().align().bit(self.align.into()));
-                while self.rb.cr2.read().swstart().bit_is_set() {}
+                while self.rb.cr2().read().swstart().bit_is_set() {}
                 // ADC wait for conversion results
-                while self.rb.sr.read().eoc().bit_is_clear() {}
+                while self.rb.sr().read().eoc().bit_is_clear() {}
 
-                let res = self.rb.dr.read().data().bits();
+                let res = self.rb.dr().read().data().bits();
                 res
             }
 
@@ -461,9 +473,9 @@ impl Adc<ADC1> {
     ///     v_chan = adc.read(chan) * 1210 / adc.read_vref()
     pub fn read_vref(&mut self, adc_common: &ADC_COMMON) -> u16 {
         ////////////////
-        let tsv_off = if adc_common.ccr.read().tsvrefe().bit_is_clear() {
-            adc_common.ccr.modify(|_, w| w.vbate().clear_bit());
-            adc_common.ccr.modify(|_, w| w.tsvrefe().set_bit());
+        let tsv_off = if adc_common.ccr().read().tsvrefe().bit_is_clear() {
+            adc_common.ccr().modify(|_, w| w.vbate().clear_bit());
+            adc_common.ccr().modify(|_, w| w.tsvrefe().set_bit());
 
             // The reference manual says that a stabilization time is needed after the powering the
             // sensor, this time can be found in the datasheets.
@@ -477,7 +489,7 @@ impl Adc<ADC1> {
         let val = self.convert(17u8);
 
         if tsv_off {
-            adc_common.ccr.modify(|_, w| w.tsvrefe().clear_bit());
+            adc_common.ccr().modify(|_, w| w.tsvrefe().clear_bit());
         }
 
         val

@@ -90,7 +90,7 @@ impl<T: 'static + SupportedWord> DisplayController<T> {
             None => base_clk = 16_000_000,
         }
         let rcc = unsafe { &(*RCC::ptr()) };
-        let pllm: u8 = rcc.pllcfgr.read().pllm().bits();
+        let pllm: u8 = rcc.pllcfgr().read().pllm().bits();
 
         // There are 24 combinations possible for a divisor with PLLR and DIVR
         // We find the one that is the closest possible to the target value
@@ -136,38 +136,39 @@ impl<T: 'static + SupportedWord> DisplayController<T> {
         };
 
         // // Write PPLSAI configuration
-        rcc.pllsaicfgr.write(|w| unsafe {
+        rcc.pllsaicfgr().write(|w| unsafe {
             w.pllsain()
                 .bits(best_plln as u16)
                 .pllsair()
                 .bits(best_pllr as u8)
         });
-        rcc.dckcfgr1.modify(|_, w| w.pllsaidivr().bits(pllsaidivr));
+        rcc.dckcfgr1()
+            .modify(|_, w| unsafe { w.pllsaidivr().bits(pllsaidivr) });
 
         // Enable PLLSAI and wait for it
-        rcc.cr.modify(|_, w| w.pllsaion().on());
-        while rcc.cr.read().pllsairdy().is_not_ready() {}
+        rcc.cr().modify(|_, w| w.pllsaion().on());
+        while rcc.cr().read().pllsairdy().is_not_ready() {}
 
         // Configure LTDC Timing registers
-        ltdc.sscr.write(|w| {
+        ltdc.sscr().write(|w| unsafe {
             w.hsw()
                 .bits((config.h_sync - 1) as u16)
                 .vsh()
                 .bits((config.v_sync - 1) as u16)
         });
-        ltdc.bpcr.write(|w| {
+        ltdc.bpcr().write(|w| unsafe {
             w.ahbp()
                 .bits((config.h_sync + config.h_back_porch - 1) as u16)
                 .avbp()
                 .bits((config.v_sync + config.v_back_porch - 1) as u16)
         });
-        ltdc.awcr.write(|w| {
+        ltdc.awcr().write(|w| unsafe {
             w.aaw()
                 .bits((config.h_sync + config.h_back_porch + config.active_width - 1) as u16)
                 .aah()
                 .bits((config.v_sync + config.v_back_porch + config.active_height - 1) as u16)
         });
-        ltdc.twcr.write(|w| {
+        ltdc.twcr().write(|w| unsafe {
             w.totalw()
                 .bits(total_width as u16)
                 .totalh()
@@ -175,7 +176,7 @@ impl<T: 'static + SupportedWord> DisplayController<T> {
         });
 
         // Configure LTDC signals polarity
-        ltdc.gcr.write(|w| {
+        ltdc.gcr().write(|w| {
             w.hspol()
                 .bit(config.h_sync_pol)
                 .vspol()
@@ -187,17 +188,18 @@ impl<T: 'static + SupportedWord> DisplayController<T> {
         });
 
         // Set blue background color
-        ltdc.bccr.write(|w| unsafe { w.bits(0xAAAAAAAA) });
+        ltdc.bccr().write(|w| unsafe { w.bits(0xAAAAAAAA) });
 
         // TODO: configure interupts
 
         // Reload ltdc config immediatly
-        ltdc.srcr.modify(|_, w| w.imr().set_bit());
+        ltdc.srcr().modify(|_, w| w.imr().set_bit());
         // Turn display ON
-        ltdc.gcr.modify(|_, w| w.ltdcen().set_bit().den().set_bit());
+        ltdc.gcr()
+            .modify(|_, w| w.ltdcen().set_bit().den().set_bit());
 
         // Reload ltdc config immediatly
-        ltdc.srcr.modify(|_, w| w.imr().set_bit());
+        ltdc.srcr().modify(|_, w| w.imr().set_bit());
 
         DisplayController {
             _ltdc: ltdc,
@@ -222,8 +224,8 @@ impl<T: 'static + SupportedWord> DisplayController<T> {
         pixel_format: PixelFormat,
     ) {
         let _layer = match &layer {
-            Layer::L1 => &self._ltdc.layer1,
-            Layer::L2 => &self._ltdc.layer2,
+            Layer::L1 => self._ltdc.layer1(),
+            Layer::L2 => self._ltdc.layer2(),
         };
 
         let height = self.config.active_height;
@@ -235,13 +237,13 @@ impl<T: 'static + SupportedWord> DisplayController<T> {
         let h_win_start = self.config.h_sync + self.config.h_back_porch - 1;
         let v_win_start = self.config.v_sync + self.config.v_back_porch - 1;
 
-        _layer.whpcr.write(|w| {
+        _layer.whpcr().write(|w| unsafe {
             w.whstpos()
                 .bits(h_win_start + 1)
                 .whsppos()
                 .bits(h_win_start + width)
         });
-        _layer.wvpcr.write(|w| {
+        _layer.wvpcr().write(|w| unsafe {
             w.wvstpos()
                 .bits(v_win_start + 1)
                 .wvsppos()
@@ -249,7 +251,7 @@ impl<T: 'static + SupportedWord> DisplayController<T> {
         });
 
         // Set pixel format
-        _layer.pfcr.write(|w| {
+        _layer.pfcr().write(|w| unsafe {
             w.pf().bits(match &pixel_format {
                 PixelFormat::ARGB8888 => 0b000,
                 // PixelFormat::RGB888 => 0b001,
@@ -264,25 +266,25 @@ impl<T: 'static + SupportedWord> DisplayController<T> {
         });
 
         // Set global alpha value to 1 (255/255). Used for layer blending.
-        _layer.cacr.write(|w| w.consta().bits(0xFF));
+        _layer.cacr().write(|w| unsafe { w.consta().bits(0xFF) });
 
         // Set default color to plain (not transparent) red (for debug
         // purposes). The default color is used outside the defined layer window
         // or when a layer is disabled.
-        _layer.dccr.write(|w| unsafe { w.bits(0xFFFF0000) });
+        _layer.dccr().write(|w| unsafe { w.bits(0xFFFF0000) });
 
         // Blending factor: how the layer is combined with the layer below it
         // (layer 2 with layer 1 or layer 1 with background). Here it is set so
         // that the blending factor does not take the pixel alpha value, just
         // the global value of the layer
         _layer
-            .bfcr
+            .bfcr()
             .write(|w| unsafe { w.bf1().bits(0b100).bf2().bits(0b101) });
 
         // Color frame buffer start address
         _layer
-            .cfbar
-            .write(|w| w.cfbadd().bits(buffer.as_ptr() as u32));
+            .cfbar()
+            .write(|w| unsafe { w.cfbadd().bits(buffer.as_ptr() as u32) });
 
         // Color frame buffer line length (active*byte per pixel + 3), and pitch
         let byte_per_pixel: u16 = match &pixel_format {
@@ -296,7 +298,7 @@ impl<T: 'static + SupportedWord> DisplayController<T> {
             PixelFormat::AL88 => 2,
             // _ => unimplemented!(),
         };
-        _layer.cfblr.write(|w| {
+        _layer.cfblr().write(|w| unsafe {
             w.cfbp()
                 .bits(width * byte_per_pixel)
                 .cfbll()
@@ -304,13 +306,15 @@ impl<T: 'static + SupportedWord> DisplayController<T> {
         });
 
         // Frame buffer number of lines
-        _layer.cfblnr.write(|w| w.cfblnbr().bits(height));
+        _layer
+            .cfblnr()
+            .write(|w| unsafe { w.cfblnbr().bits(height) });
 
         // No Color Lookup table (CLUT)
-        _layer.cr.modify(|_, w| w.cluten().clear_bit());
+        _layer.cr().modify(|_, w| w.cluten().clear_bit());
 
         // Config DMA2D hardware acceleration : pixel format, no CLUT
-        self._dma2d.fgpfccr.write(|w| unsafe {
+        self._dma2d.fgpfccr().write(|w| unsafe {
             w.bits(match &pixel_format {
                 PixelFormat::ARGB8888 => 0b000,
                 // PixelFormat::RGB888 => 0b0001, unsupported for now because u24 does not exist
@@ -336,8 +340,12 @@ impl<T: 'static + SupportedWord> DisplayController<T> {
     /// Enable the layer
     pub fn enable_layer(&self, layer: Layer) {
         match layer {
-            Layer::L1 => self._ltdc.layer1.cr.modify(|_, w| w.len().set_bit()),
-            Layer::L2 => self._ltdc.layer2.cr.modify(|_, w| w.len().set_bit()),
+            Layer::L1 => {
+                self._ltdc.layer1().cr().modify(|_, w| w.len().set_bit());
+            }
+            Layer::L2 => {
+                self._ltdc.layer2().cr().modify(|_, w| w.len().set_bit());
+            }
         }
     }
 
@@ -370,7 +378,7 @@ impl<T: 'static + SupportedWord> DisplayController<T> {
         color: u32,
     ) {
         // Output color format
-        self._dma2d.opfccr.write(|w| {
+        self._dma2d.opfccr().write(|w| {
             w.cm().bits(match &self.pixel_format {
                 PixelFormat::ARGB8888 => 0b000,
                 // PixelFormat::RGB888 => 0b001, unsupported for now
@@ -382,11 +390,13 @@ impl<T: 'static + SupportedWord> DisplayController<T> {
         });
 
         // Output color
-        self._dma2d.ocolr.write_with_zero(|w| w.bits(color));
+        self._dma2d
+            .ocolr()
+            .write_with_zero(|w| unsafe { w.bits(color) });
 
         // Destination memory address
         let offset: isize = (top_left.0 + self.config.active_width as usize * top_left.1) as isize;
-        self._dma2d.omar.write_with_zero(|w| {
+        self._dma2d.omar().write_with_zero(|w| unsafe {
             w.bits(match &layer {
                 Layer::L1 => self.buffer1.as_ref().unwrap().as_ptr().offset(offset) as u32,
                 Layer::L2 => self.buffer2.as_ref().unwrap().as_ptr().offset(offset) as u32,
@@ -394,7 +404,7 @@ impl<T: 'static + SupportedWord> DisplayController<T> {
         });
 
         // Pixels per line and number of lines
-        self._dma2d.nlr.write(|w| {
+        self._dma2d.nlr().write(|w| {
             w.pl()
                 .bits((bottom_right.0 - top_left.0) as u16)
                 .nl()
@@ -402,21 +412,21 @@ impl<T: 'static + SupportedWord> DisplayController<T> {
         });
 
         // Line offset
-        self._dma2d.oor.write(|w| {
+        self._dma2d.oor().write(|w| {
             w.lo()
                 .bits(top_left.0 as u16 + self.config.active_width - bottom_right.0 as u16)
         });
 
         // Start transfert: register to memory mode
         self._dma2d
-            .cr
+            .cr()
             .modify(|_, w| w.mode().bits(0b11).start().set_bit());
     }
 
     /// Reload display controller immediatly
     pub fn reload(&self) {
         // Reload ltdc config immediatly
-        self._ltdc.srcr.modify(|_, w| w.imr().set_bit());
+        self._ltdc.srcr().modify(|_, w| w.imr().set_bit());
     }
 }
 

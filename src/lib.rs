@@ -27,46 +27,46 @@ compile_error!(
 pub(crate) use embedded_hal as hal;
 
 #[cfg(feature = "stm32f722")]
-pub use stm32f7::stm32f7x2 as pac;
+pub use stm32f7::stm32f722 as pac;
 
 #[cfg(feature = "stm32f723")]
-pub use stm32f7::stm32f7x3 as pac;
+pub use stm32f7::stm32f723 as pac;
 
 #[cfg(any(feature = "stm32f730", feature = "stm32f730-lpc"))]
 pub use stm32f7::stm32f730 as pac;
 
 #[cfg(feature = "stm32f732")]
-pub use stm32f7::stm32f7x2 as pac;
+pub use stm32f7::stm32f732 as pac;
 
 #[cfg(feature = "stm32f733")]
-pub use stm32f7::stm32f7x3 as pac;
+pub use stm32f7::stm32f733 as pac;
 
 #[cfg(feature = "stm32f745")]
 pub use stm32f7::stm32f745 as pac;
 
 #[cfg(feature = "stm32f746")]
-pub use stm32f7::stm32f7x6 as pac;
+pub use stm32f7::stm32f746 as pac;
 
 #[cfg(feature = "stm32f756")]
-pub use stm32f7::stm32f7x6 as pac;
+pub use stm32f7::stm32f746 as pac;
 
 #[cfg(feature = "stm32f765")]
 pub use stm32f7::stm32f765 as pac;
 
 #[cfg(feature = "stm32f767")]
-pub use stm32f7::stm32f7x7 as pac;
+pub use stm32f7::stm32f767 as pac;
 
 #[cfg(feature = "stm32f769")]
-pub use stm32f7::stm32f7x9 as pac;
+pub use stm32f7::stm32f769 as pac;
 
 #[cfg(feature = "stm32f777")]
-pub use stm32f7::stm32f7x7 as pac;
+pub use stm32f7::stm32f767 as pac;
 
 #[cfg(feature = "stm32f778")]
-pub use stm32f7::stm32f7x9 as pac;
+pub use stm32f7::stm32f769 as pac;
 
 #[cfg(feature = "stm32f779")]
-pub use stm32f7::stm32f7x9 as pac;
+pub use stm32f7::stm32f769 as pac;
 
 // Enable use of interrupt macro
 #[cfg(feature = "rt")]

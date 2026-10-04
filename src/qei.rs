@@ -1,11 +1,11 @@
 //! Quadrature Encoder Interface API
 
-use crate::rcc::{Enable, Reset, APB1};
 #[cfg(feature = "stm32f767")]
-use stm32f7::stm32f7x7::{TIM2, TIM3, TIM4, TIM5};
+use crate::pac::{TIM2, TIM3, TIM4, TIM5};
+use crate::rcc::{Enable, Reset, APB1};
 
 #[cfg(feature = "stm32f769")]
-use stm32f7::stm32f7x9::{TIM2, TIM3, TIM4, TIM5};
+use crate::pac::{TIM2, TIM3, TIM4, TIM5};
 
 #[derive(Debug)]
 pub enum Direction {
@@ -127,7 +127,7 @@ macro_rules! hal_qei {
                     .write(|w| unsafe { w.cc1s().bits(0b01).cc2s().bits(0b01) });
 
                 // enable and configure to capture on rising edge
-                tim.ccer.write(|w| {
+                tim.ccer().write(|w| {
                     w.cc1e()
                         .set_bit()
                         .cc1p()
@@ -139,10 +139,11 @@ macro_rules! hal_qei {
                 });
 
                 // configure as quadrature encoder
-                tim.smcr.write(|w| w.sms().bits(options.slave_mode as u8));
-                tim.arr
+                tim.smcr()
+                    .write(|w| unsafe { w.sms().bits(options.slave_mode as u8) });
+                tim.arr()
                     .write(|w| unsafe { w.bits(options.auto_reload_value) });
-                tim.cr1.write(|w| w.cen().set_bit());
+                tim.cr1().write(|w| w.cen().set_bit());
 
                 Self {
                     tim,
@@ -152,11 +153,11 @@ macro_rules! hal_qei {
             }
 
             pub fn read_count(&self) -> $bits {
-                self.tim.cnt.read().bits() as $bits
+                self.tim.cnt().read().bits() as $bits
             }
 
             pub fn read_direction(&self) -> Direction {
-                if self.tim.cr1.read().dir().bit_is_clear() {
+                if self.tim.cr1().read().dir().bit_is_clear() {
                     Direction::Upcounting
                 } else {
                     Direction::Downcounting

@@ -41,10 +41,10 @@ impl RngExt for RNG {
             let rcc = unsafe { &*RCC::ptr() };
 
             // need set enable pll for this operation
-            if rcc.cr.read().pllrdy().bit_is_clear() {
-                rcc.cr.modify(|_, w| w.pllon().set_bit());
+            if rcc.cr().read().pllrdy().bit_is_clear() {
+                rcc.cr().modify(|_, w| w.pllon().set_bit());
                 // wait till pll is ready
-                while rcc.cr.read().pllrdy().bit_is_clear() {}
+                while rcc.cr().read().pllrdy().bit_is_clear() {}
             }
             unsafe {
                 // enable RNG_CLK (peripheral clock)
@@ -56,13 +56,13 @@ impl RngExt for RNG {
             }
 
             // enable the RNG peripheral
-            self.cr.modify(|_, w| w.rngen().set_bit());
+            self.cr().modify(|_, w| w.rngen().set_bit());
             // hardware check for clock is used
             // instead of software calculation, which may be inaccurate.
             // until data is available we will check for CECS flag, if it is set
             // means that clock error occured
-            while !self.sr.read().drdy().bit() {
-                assert!(!self.sr.read().cecs().bit());
+            while !self.sr().read().drdy().bit() {
+                assert!(!self.sr().read().cecs().bit());
             }
         });
 
@@ -79,7 +79,7 @@ impl Rng {
     /// May fail if, for example RNG_CLK is misconfigured.
     pub fn get_rand(&mut self) -> Result<u32, ErrorKind> {
         loop {
-            let status = self.rb.sr.read();
+            let status = self.rb.sr().read();
             if status.cecs().bit() {
                 return Err(ErrorKind::ClockError);
             }
@@ -87,7 +87,7 @@ impl Rng {
                 return Err(ErrorKind::SeedError);
             }
             if status.drdy().bit() {
-                return Ok(self.rb.dr.read().rndata().bits());
+                return Ok(self.rb.dr().read().rndata().bits());
             }
         }
     }

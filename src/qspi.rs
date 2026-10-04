@@ -78,11 +78,13 @@ impl Qspi {
         unsafe {
             // Single flash mode with a QSPI clock prescaler of 2 (216 / 2 = 108 MHz), FIFO
             // threshold only matters for DMA and is set to 4 to allow word sized DMA requests
-            qspi.cr
-                .write_with_zero(|w| w.prescaler().bits(1).fthres().bits(3).en().set_bit());
+            qspi.cr().write_with_zero(|w| unsafe {
+                w.prescaler().bits(1).fthres().bits(3).en().set_bit()
+            });
 
             // Set the device size
-            qspi.dcr.write_with_zero(|w| w.fsize().bits(size - 1));
+            qspi.dcr()
+                .write_with_zero(|w| unsafe { w.fsize().bits(size - 1) });
         }
 
         Qspi { qspi, adsize }
@@ -129,7 +131,7 @@ impl Qspi {
                 let rx_transfer = rx_transfer.start(dma);
 
                 // Set DMA bit since we are using it
-                self.qspi.cr.modify(|_, w| w.dmaen().set_bit());
+                self.qspi.cr().modify(|_, w| w.dmaen().set_bit());
 
                 Ok(rx_transfer)
             }
@@ -178,7 +180,7 @@ impl Qspi {
                 let tx_transfer = tx_transfer.start(dma);
 
                 // Set DMA bit since we are using it
-                self.qspi.cr.modify(|_, w| w.dmaen().set_bit());
+                self.qspi.cr().modify(|_, w| w.dmaen().set_bit());
 
                 Ok(tx_transfer)
             }
@@ -189,7 +191,7 @@ impl Qspi {
     /// Polling indirect read. Can also be used to perform transactions with no data.
     pub fn read(&mut self, buf: &mut [u8], transaction: QspiTransaction) -> Result<(), Error> {
         // Clear DMA bit since we are not using it
-        self.qspi.cr.modify(|_, w| w.dmaen().clear_bit());
+        self.qspi.cr().modify(|_, w| w.dmaen().clear_bit());
 
         // Setup the transaction registers
         self.setup_transaction(QspiMode::INDIRECT_READ, &transaction);
@@ -199,10 +201,10 @@ impl Qspi {
             let mut idx: usize = 0;
             while idx < len {
                 // Check if there are bytes in the FIFO
-                let num_bytes = self.qspi.sr.read().flevel().bits();
+                let num_bytes = self.qspi.sr().read().flevel().bits();
                 if num_bytes > 0 {
                     // Read a word
-                    let word = self.qspi.dr.read().data().bits();
+                    let word = self.qspi.dr().read().data().bits();
 
                     // Unpack the word
                     let num_unpack = if num_bytes >= 4 { 4 } else { num_bytes };
@@ -220,7 +222,7 @@ impl Qspi {
     /// Polling indirect write.
     pub fn write(&mut self, buf: &[u8], transaction: QspiTransaction) -> Result<(), Error> {
         // Clear DMA bit since we are not using it
-        self.qspi.cr.modify(|_, w| w.dmaen().clear_bit());
+        self.qspi.cr().modify(|_, w| w.dmaen().clear_bit());
 
         // Setup the transaction registers
         self.setup_transaction(QspiMode::INDIRECT_WRITE, &transaction);
@@ -230,7 +232,7 @@ impl Qspi {
             let mut idx: usize = 0;
             while idx < len {
                 // Check if the FIFO is empty
-                let num_bytes = self.qspi.sr.read().flevel().bits();
+                let num_bytes = self.qspi.sr().read().flevel().bits();
                 if num_bytes == 0 {
                     // Pack the word
                     let mut word: u32 = 0;
@@ -242,7 +244,7 @@ impl Qspi {
 
                     // Write a word
                     unsafe {
-                        self.qspi.dr.write(|w| w.data().bits(word));
+                        self.qspi.dr().write(|w| w.data().bits(word));
                     }
                 }
             }
@@ -255,15 +257,15 @@ impl Qspi {
     fn setup_transaction(&mut self, fmode: u8, transaction: &QspiTransaction) {
         unsafe {
             // Clear any prior status flags
-            self.qspi.fcr.write(|w| w.bits(0x1B));
+            self.qspi.fcr().write(|w| unsafe { w.bits(0x1B) });
 
             // Update data length, if applicable
             if let Some(len) = transaction.data_len {
-                self.qspi.dlr.write(|w| w.bits(len as u32 - 1));
+                self.qspi.dlr().write(|w| unsafe { w.bits(len as u32 - 1) });
             }
 
             // Update CCR register with metadata
-            self.qspi.ccr.write_with_zero(|w| {
+            self.qspi.ccr().write_with_zero(|w| unsafe {
                 w.fmode()
                     .bits(fmode)
                     .imode()
@@ -284,14 +286,14 @@ impl Qspi {
 
             // Update address register, if applicable
             if let Some(addr) = transaction.address {
-                self.qspi.ar.write(|w| w.bits(addr));
+                self.qspi.ar().write(|w| unsafe { w.bits(addr) });
             }
         }
     }
 
     /// Get data register address.
     fn dr_address(&self) -> u32 {
-        &self.qspi.dr as *const _ as _
+        self.qspi.dr().as_ptr() as _
     }
 }
 

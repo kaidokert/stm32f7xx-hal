@@ -168,27 +168,27 @@ where
         // Calculate correct baudrate divisor on the fly
         let brr = match config.oversampling {
             Oversampling::By8 => {
-                usart.cr1.modify(|_, w| w.over8().set_bit());
+                usart.cr1().modify(|_, w| w.over8().set_bit());
 
                 let usart_div = 2 * clk / config.baud_rate;
 
                 0xfff0 & usart_div | 0x0007 & ((usart_div & 0x000f) >> 1)
             }
             Oversampling::By16 => {
-                usart.cr1.modify(|_, w| w.over8().clear_bit());
+                usart.cr1().modify(|_, w| w.over8().clear_bit());
 
                 clk / config.baud_rate
             }
         };
 
-        usart.brr.write(|w| unsafe { w.bits(brr) });
+        usart.brr().write(|w| unsafe { w.bits(brr) });
 
         // Set character match and reset other registers to disable advanced USART features
         let ch = config.character_match.unwrap_or(0);
-        usart.cr2.write(|w| w.add().bits(ch));
+        usart.cr2().write(|w| unsafe { w.add().bits(ch) });
 
         // Enable tx / rx, configure data bits and parity
-        usart.cr1.modify(|_, w| {
+        usart.cr1().modify(|_, w| {
             w.te().enabled().re().enabled().ue().enabled();
 
             // M[1:0] are used to set data bits
@@ -209,7 +209,7 @@ where
         });
 
         // Enable DMA
-        usart.cr3.write(|w| w.dmat().enabled().dmar().enabled());
+        usart.cr3().write(|w| w.dmat().enabled().dmar().enabled());
 
         Serial { usart, pins }
     }
@@ -217,20 +217,36 @@ where
     /// Starts listening for an interrupt event
     pub fn listen(&mut self, event: Event) {
         match event {
-            Event::Rxne => self.usart.cr1.modify(|_, w| w.rxneie().set_bit()),
-            Event::Txe => self.usart.cr1.modify(|_, w| w.txeie().set_bit()),
-            Event::CharacterMatch => self.usart.cr1.modify(|_, w| w.cmie().set_bit()),
-            Event::Error => self.usart.cr3.modify(|_, w| w.eie().set_bit()),
+            Event::Rxne => {
+                self.usart.cr1().modify(|_, w| w.rxneie().set_bit());
+            }
+            Event::Txe => {
+                self.usart.cr1().modify(|_, w| w.txeie().set_bit());
+            }
+            Event::CharacterMatch => {
+                self.usart.cr1().modify(|_, w| w.cmie().set_bit());
+            }
+            Event::Error => {
+                self.usart.cr3().modify(|_, w| w.eie().set_bit());
+            }
         }
     }
 
     /// End listening for an interrupt event
     pub fn unlisten(&mut self, event: Event) {
         match event {
-            Event::Rxne => self.usart.cr1.modify(|_, w| w.rxneie().clear_bit()),
-            Event::Txe => self.usart.cr1.modify(|_, w| w.txeie().clear_bit()),
-            Event::CharacterMatch => self.usart.cr1.modify(|_, w| w.cmie().clear_bit()),
-            Event::Error => self.usart.cr3.modify(|_, w| w.eie().clear_bit()),
+            Event::Rxne => {
+                self.usart.cr1().modify(|_, w| w.rxneie().clear_bit());
+            }
+            Event::Txe => {
+                self.usart.cr1().modify(|_, w| w.txeie().clear_bit());
+            }
+            Event::CharacterMatch => {
+                self.usart.cr1().modify(|_, w| w.cmie().clear_bit());
+            }
+            Event::Error => {
+                self.usart.cr3().modify(|_, w| w.eie().clear_bit());
+            }
         }
     }
 
@@ -311,7 +327,7 @@ where
     {
         // This is safe, as we're only using the USART instance to access the
         // address of one register.
-        let address = &unsafe { &*U::ptr() }.rdr as *const _ as _;
+        let address = unsafe { (*U::ptr()).rdr().as_ptr() } as _;
 
         // Safe, because the trait bounds on this method guarantee that `buffer`
         // can be written to safely.
@@ -336,10 +352,10 @@ where
 
     fn read(&mut self) -> nb::Result<u8, Error> {
         // NOTE(unsafe) atomic read with no side effects
-        let isr = unsafe { (*U::ptr()).isr.read() };
+        let isr = unsafe { (*U::ptr()).isr().read() };
 
         // NOTE(unsafe): Only used for atomic writes, to clear error flags.
-        let icr = unsafe { &(*U::ptr()).icr };
+        let icr = unsafe { &(*U::ptr()).icr() };
 
         if isr.pe().bit_is_set() {
             icr.write(|w| w.pecf().clear());
@@ -363,7 +379,7 @@ where
             return Ok(unsafe {
                 // Casting to `u8` should be fine, as we've configured the USART
                 // to use 8 data bits.
-                (*U::ptr()).rdr.read().rdr().bits() as u8
+                (*U::ptr()).rdr().read().rdr().bits() as u8
             });
         }
 
@@ -400,7 +416,7 @@ where
         //
         // This is safe, as we're doing just one atomic write.
         let usart = unsafe { &*U::ptr() };
-        usart.icr.write(|w| w.tccf().clear());
+        usart.icr().write(|w| w.tccf().clear());
 
         // Safe, because the trait bounds on this method guarantee that `buffer`
         // can be read from safely.
@@ -410,7 +426,7 @@ where
                 stream,
                 data,
                 self,
-                &usart.tdr as *const _ as _,
+                usart.tdr().as_ptr() as _,
                 dma::Direction::MemoryToPeripheral,
             )
         }
@@ -425,7 +441,7 @@ where
 
     fn flush(&mut self) -> nb::Result<(), Self::Error> {
         // NOTE(unsafe) atomic read with no side effects
-        let isr = unsafe { (*U::ptr()).isr.read() };
+        let isr = unsafe { (*U::ptr()).isr().read() };
 
         if isr.tc().bit_is_set() {
             Ok(())
@@ -436,12 +452,12 @@ where
 
     fn write(&mut self, byte: u8) -> nb::Result<(), Self::Error> {
         // NOTE(unsafe) atomic read with no side effects
-        let isr = unsafe { (*U::ptr()).isr.read() };
+        let isr = unsafe { (*U::ptr()).isr().read() };
 
         if isr.txe().bit_is_set() {
             // NOTE(unsafe) atomic write to stateless register
             // NOTE(write_volatile) 8-bit write that's not possible through the svd2rust API
-            unsafe { ptr::write_volatile(core::ptr::addr_of!((*U::ptr()).tdr) as *mut u8, byte) }
+            unsafe { ptr::write_volatile((*U::ptr()).tdr().as_ptr() as *mut u8, byte) }
             Ok(())
         } else {
             Err(nb::Error::WouldBlock)
@@ -531,7 +547,7 @@ macro_rules! impl_instance {
                 }
 
                 fn select_sysclock(rcc: &pac::rcc::RegisterBlock, sys: bool) {
-                    rcc.dckcfgr2.modify(|_, w| w.$usartXsel().bits(sys as _));
+                    rcc.dckcfgr2().modify(|_, w| unsafe { w.$usartXsel().bits(sys as _) });
                 }
             }
         )+

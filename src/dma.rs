@@ -124,30 +124,34 @@ where
         let nr = T::Stream::number();
 
         // Disable stream
-        handle.dma.st[nr].cr.modify(|_, w| w.en().disabled());
-        while handle.dma.st[nr].cr.read().en().is_enabled() {}
+        handle.dma.st(nr).cr().modify(|_, w| w.en().disabled());
+        while handle.dma.st(nr).cr().read().en().is_enabled() {}
 
         T::Stream::clear_status_flags(&handle.dma);
 
         // Set peripheral port register address
-        handle.dma.st[nr].par.write(|w| w.pa().bits(address));
+        handle.dma.st(nr).par().write(|w| w.pa().bits(address));
 
         // Set memory address
         let memory_address = buffer.as_ptr() as u32;
-        handle.dma.st[nr]
-            .m0ar
+        handle
+            .dma
+            .st(nr)
+            .m0ar()
             .write(|w| w.m0a().bits(memory_address));
 
         // Write number of data items to transfer
         //
         // We've asserted that `data.len()` fits into a `u16`, so the cast
         // should be fine.
-        handle.dma.st[nr]
-            .ndtr
+        handle
+            .dma
+            .st(nr)
+            .ndtr()
             .write(|w| w.ndt().bits(buffer.len() as u16));
 
         // Configure FIFO
-        handle.dma.st[nr].fcr.modify(|_, w| {
+        handle.dma.st(nr).fcr().modify(|_, w| {
             w
                 // Interrupt disabled
                 .feie()
@@ -158,7 +162,7 @@ where
         });
 
         // Select channel
-        handle.dma.st[nr].cr.write(|w| {
+        handle.dma.st(nr).cr().write(|w| {
             let w = T::Channel::select(w);
 
             let w = match direction {
@@ -227,7 +231,7 @@ where
         handle: &Handle<T::Instance, state::Enabled>,
         interrupts: Interrupts,
     ) {
-        handle.dma.st[T::Stream::number()].cr.modify(|_, w| {
+        handle.dma.st(T::Stream::number()).cr().modify(|_, w| {
             let w = if interrupts.transfer_complete {
                 w.tcie().enabled()
             } else {
@@ -267,8 +271,10 @@ where
         T::Stream::clear_status_flags(&handle.dma);
         atomic::fence(Ordering::SeqCst);
 
-        handle.dma.st[T::Stream::number()]
-            .cr
+        handle
+            .dma
+            .st(T::Stream::number())
+            .cr()
             .modify(|_, w| w.en().enabled());
 
         Transfer {
@@ -284,8 +290,10 @@ where
 {
     /// Checks whether the transfer is still ongoing
     pub fn is_active(&self, handle: &Handle<T::Instance, state::Enabled>) -> bool {
-        handle.dma.st[T::Stream::number()]
-            .cr
+        handle
+            .dma
+            .st(T::Stream::number())
+            .cr()
             .read()
             .en()
             .is_enabled()
@@ -293,8 +301,10 @@ where
 
     /// Try to cancel an in process transfer. Check is_active to verify cancellation
     pub fn cancel(&self, handle: &Handle<T::Instance, state::Enabled>) {
-        handle.dma.st[T::Stream::number()]
-            .cr
+        handle
+            .dma
+            .st(T::Stream::number())
+            .cr()
             .write(|w| w.en().disabled());
     }
 
@@ -518,26 +528,26 @@ macro_rules! impl_stream {
                 fn number() -> usize { $number }
 
                 fn clear_status_flags(dma: &dma2::RegisterBlock) {
-                    dma.$flag_clear_reg.write(|w|
+                    dma.$flag_clear_reg().write(|w|
                         w
                             $(.$flag_clear_field().clear())*
                     );
                 }
 
                 fn is_transfer_complete(dma: &dma2::RegisterBlock) -> bool {
-                    dma.$flag_reg.read().$tcif().is_complete()
+                    dma.$flag_reg().read().$tcif().is_complete()
                 }
                 fn is_half_transfer(dma: &dma2::RegisterBlock) -> bool {
-                    dma.$flag_reg.read().$htif().is_half()
+                    dma.$flag_reg().read().$htif().is_half()
                 }
                 fn is_transfer_error(dma: &dma2::RegisterBlock) -> bool {
-                    dma.$flag_reg.read().$teif().is_error()
+                    dma.$flag_reg().read().$teif().is_error()
                 }
                 fn is_direct_mode_error(dma: &dma2::RegisterBlock) -> bool {
-                    dma.$flag_reg.read().$dmeif().is_error()
+                    dma.$flag_reg().read().$dmeif().is_error()
                 }
                 fn is_fifo_error(dma: &dma2::RegisterBlock) -> bool {
-                    dma.$flag_reg.read().$feif().is_error()
+                    dma.$flag_reg().read().$feif().is_error()
                 }
             }
         )*
@@ -590,7 +600,7 @@ macro_rules! impl_channel {
                 {
                     // This is safe, as long as the macro caller passes in valid
                     // channel numbers.
-                    w.chsel().bits($number)
+                    unsafe { w.chsel().bits($number) }
                 }
             }
         )*
@@ -734,29 +744,29 @@ where
 }
 
 pub trait SupportedWordSize: private::Sealed + Unpin + 'static {
-    fn msize() -> cr::MSIZE_A;
-    fn psize() -> cr::PSIZE_A;
+    fn msize() -> cr::PSIZE;
+    fn psize() -> cr::PSIZE;
 }
 
 impl private::Sealed for u8 {}
 impl SupportedWordSize for u8 {
-    fn msize() -> cr::MSIZE_A {
-        cr::MSIZE_A::Bits8
+    fn msize() -> cr::PSIZE {
+        cr::PSIZE::Bits8
     }
 
-    fn psize() -> cr::PSIZE_A {
-        cr::MSIZE_A::Bits8
+    fn psize() -> cr::PSIZE {
+        cr::PSIZE::Bits8
     }
 }
 
 impl private::Sealed for u16 {}
 impl SupportedWordSize for u16 {
-    fn msize() -> cr::MSIZE_A {
-        cr::MSIZE_A::Bits16
+    fn msize() -> cr::PSIZE {
+        cr::PSIZE::Bits16
     }
 
-    fn psize() -> cr::PSIZE_A {
-        cr::MSIZE_A::Bits16
+    fn psize() -> cr::PSIZE {
+        cr::PSIZE::Bits16
     }
 }
 
