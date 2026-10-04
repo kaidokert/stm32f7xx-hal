@@ -339,19 +339,19 @@ fn calculate_timing(
 
 macro_rules! check_status_flag {
     ($i2c:expr, $flag:ident, $status:ident) => {{
-        let isr = $i2c.isr.read();
+        let isr = $i2c.isr().read();
 
         if isr.berr().bit_is_set() {
-            $i2c.icr.write(|w| w.berrcf().set_bit());
+            $i2c.icr().write(|w| w.berrcf().clear());
             Err(Other(Error::Bus))
         } else if isr.arlo().bit_is_set() {
-            $i2c.icr.write(|w| w.arlocf().set_bit());
+            $i2c.icr().write(|w| w.arlocf().clear());
             Err(Other(Error::Arbitration))
         } else if isr.nackf().bit_is_set() {
-            $i2c.icr.write(|w| w.stopcf().set_bit().nackcf().set_bit());
+            $i2c.icr().write(|w| w.stopcf().clear().nackcf().clear());
             Err(Other(Error::Acknowledge))
         } else if isr.ovr().bit_is_set() {
-            $i2c.icr.write(|w| w.stopcf().set_bit().ovrcf().set_bit());
+            $i2c.icr().write(|w| w.stopcf().clear().ovrcf().clear());
             Err(Other(Error::Overrun))
         } else if isr.$flag().$status() {
             Ok(())
@@ -416,10 +416,10 @@ macro_rules! hal {
                     // initialization so the footprint of such heavy calculation
                     // occurs only once
                     // Disable I2C during configuration
-                    self.i2c.cr1.write(|w| w.pe().disabled());
+                    self.i2c.cr1().write(|w| w.pe().disabled());
 
-                    let an_filter:bool = self.i2c.cr1.read().anfoff().is_enabled();
-                    let dnf = self.i2c.cr1.read().dnf().bits();
+                    let an_filter:bool = self.i2c.cr1().read().anfoff().is_enabled();
+                    let dnf = self.i2c.cr1().read().dnf().bits();
 
                     let i2c_timingr: I2cTiming =  match self.mode {
                         Mode::Standard{ frequency } => calculate_timing(I2C_STANDARD_MODE_SPEC, self.pclk.raw(), frequency.raw(), an_filter, dnf ),
@@ -435,7 +435,7 @@ macro_rules! hal {
                             }
                         }
                     };
-                    self.i2c.timingr.write(|w|
+                    self.i2c.timingr().write(|w| unsafe {
                         w.presc()
                             .bits(i2c_timingr.presc)
                             .scll()
@@ -446,20 +446,20 @@ macro_rules! hal {
                             .bits(i2c_timingr.sdadel)
                             .scldel()
                             .bits(i2c_timingr.scldel)
-                    );
+                        });
 
-                    self.i2c.cr1.modify(|_, w| w.pe().enabled());
+                    self.i2c.cr1().modify(|_, w| w.pe().enabled());
                 }
 
                 /// Perform an I2C software reset
                 #[allow(dead_code)]
                 fn reset(&mut self) {
-                    self.i2c.cr1.write(|w| w.pe().disabled());
+                    self.i2c.cr1().write(|w| w.pe().disabled());
                     // wait for disabled
-                    while self.i2c.cr1.read().pe().is_enabled() {}
+                    while self.i2c.cr1().read().pe().is_enabled() {}
 
                     // Re-enable
-                    self.i2c.cr1.write(|w| w.pe().enabled());
+                    self.i2c.cr1().write(|w| w.pe().enabled());
                 }
 
                 /// Set (7-bit) slave address, bus direction (write or read),
@@ -472,7 +472,7 @@ macro_rules! hal {
                 /// Data transfers of more than 255 bytes are not yet
                 /// supported, 10-bit slave address are not yet supported
                 fn start(&self, addr: u8, n_bytes: u8, read: bool, auto_stop: bool) {
-                    self.i2c.cr2.write(|mut w| {
+                    self.i2c.cr2().write(|mut w| unsafe {
                         // Setup data
                         w = w.sadd()
                             .bits(u16(addr << 1 | 0))
@@ -524,7 +524,7 @@ macro_rules! hal {
                         self.data_timeout
                     )?;
 
-                    Ok(self.nb.i2c.rxdr.read().rxdata().bits())
+                    Ok(self.nb.i2c.rxdr().read().rxdata().bits())
                 }
 
                 /// Wait the write data register to be empty  (ie for TXIS flag
@@ -538,14 +538,14 @@ macro_rules! hal {
                     )?;
 
                     // Put byte on the wire
-                    self.nb.i2c.txdr.write(|w| w.txdata().bits(byte));
+                    self.nb.i2c.txdr().write(|w| unsafe { w.txdata().bits(byte) });
 
                     Ok(())
                 }
 
                 /// Wait for any previous address sequence to end automatically.
                 fn wait_start(&self) {
-                    while self.nb.i2c.cr2.read().start().bit_is_set() {};
+                    while self.nb.i2c.cr2().read().start().bit_is_set() {};
                 }
             }
 

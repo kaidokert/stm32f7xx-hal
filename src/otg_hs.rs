@@ -101,7 +101,7 @@ unsafe impl UsbPeripheral for USB {
             {
                 // Enable and reset HS PHY
                 let rcc = &*pac::RCC::ptr();
-                rcc.ahb1enr.modify(|_, w| w.otghsulpien().enabled());
+                rcc.ahb1enr().modify(|_, w| w.otghsulpien().enabled());
                 pac::USBPHYC::enable_unchecked();
                 pac::USBPHYC::reset_unchecked();
             }
@@ -146,19 +146,20 @@ unsafe impl UsbPeripheral for USB {
 
         // Turn on LDO
         // For some reason setting the bit enables the LDO
-        phy.ldo.modify(|_, w| w.ldo_disable().set_bit());
+        phy.ldo().modify(|_, w| w.ldo_disable().set_bit());
 
         // Busy wait until ldo_status becomes true
         // Notice, this may hang
-        while phy.ldo.read().ldo_status().bit_is_clear() {}
+        while phy.ldo().read().ldo_status().bit_is_clear() {}
 
         // Setup PLL
         // This disables the the pll1 during tuning
-        phy.pll1.write(|w| unsafe { w.pll1sel().bits(pll1sel) });
+        phy.pll1().write(|w| unsafe { w.pll1sel().bits(pll1sel) });
 
-        phy.tune.modify(|r, w| unsafe { w.bits(r.bits() | 0xF13) });
+        phy.tune()
+            .modify(|r, w| unsafe { w.bits(r.bits() | 0xF13) });
 
-        phy.pll1.modify(|_, w| w.pll1en().set_bit());
+        phy.pll1().modify(|_, w| w.pll1en().set_bit());
 
         // 2ms Delay required to get internal phy clock stable
         cortex_m::asm::delay(432000);

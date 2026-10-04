@@ -92,17 +92,17 @@ macro_rules! bus_struct {
 
                 pub(crate) fn enr(&self) -> &rcc::$EN {
                     // NOTE(unsafe) this proxy grants exclusive access to this register
-                    unsafe { &(*RCC::ptr()).$en }
+                    unsafe { &(*RCC::ptr()).$en() }
                 }
 
                 pub(crate) fn lpenr(&self) -> &rcc::$LPEN {
                     // NOTE(unsafe) this proxy grants exclusive access to this register
-                    unsafe { &(*RCC::ptr()).$lpen }
+                    unsafe { &(*RCC::ptr()).$lpen() }
                 }
 
                 pub(crate) fn rstr(&self) -> &rcc::$RST {
                     // NOTE(unsafe) this proxy grants exclusive access to this register
-                    unsafe { &(*RCC::ptr()).$rst }
+                    unsafe { &(*RCC::ptr()).$rst() }
                 }
             }
         )+
@@ -1027,21 +1027,25 @@ impl CFGR {
         // Switch to fail-safe clock settings.
         // This is useful when booting from a bootloader that alters clock tree configuration.
         // Turn on HSI
-        rcc.cr.modify(|_, w| w.hsion().set_bit());
-        while rcc.cr.read().hsirdy().bit_is_clear() {}
+        rcc.cr().modify(|_, w| w.hsion().set_bit());
+        while rcc.cr().read().hsirdy().bit_is_clear() {}
         // Switch to HSI
-        rcc.cfgr.modify(|_, w| w.sw().hsi());
+        rcc.cfgr().modify(|_, w| w.sw().hsi());
 
         // Configure HSE if provided
         if self.hse.is_some() {
             // Configure the HSE mode
             match self.hse.as_ref().unwrap().mode {
-                HSEClockMode::Bypass => rcc.cr.modify(|_, w| w.hsebyp().bypassed()),
-                HSEClockMode::Oscillator => rcc.cr.modify(|_, w| w.hsebyp().not_bypassed()),
+                HSEClockMode::Bypass => {
+                    rcc.cr().modify(|_, w| w.hsebyp().bypassed());
+                }
+                HSEClockMode::Oscillator => {
+                    rcc.cr().modify(|_, w| w.hsebyp().not_bypassed());
+                }
             }
             // Start HSE
-            rcc.cr.modify(|_, w| w.hseon().on());
-            while rcc.cr.read().hserdy().is_not_ready() {}
+            rcc.cr().modify(|_, w| w.hseon().on());
+            while rcc.cr().read().hserdy().is_not_ready() {}
         }
 
         // Enable sequence follows by RM 4.1.4 Entering Overdrive mode.
@@ -1050,9 +1054,9 @@ impl CFGR {
             // Since the main-PLL configuration parameters cannot be changed once PLL is enabled, it is
             // recommended to configure PLL before enabling it (selection of the HSI or HSE oscillator as
             // PLL clock source, and configuration of division factors M, N, P, and Q).
-            rcc.cr.modify(|_, w| w.pllon().off());
+            rcc.cr().modify(|_, w| w.pllon().off());
 
-            rcc.pllcfgr.modify(|_, w| unsafe {
+            rcc.pllcfgr().modify(|_, w| unsafe {
                 w.pllm().bits(self.pllm);
                 w.plln().bits(self.plln);
                 w.pllp().bits(self.pllp as u8);
@@ -1061,34 +1065,34 @@ impl CFGR {
             });
 
             // Enable PWR domain and setup VOSscale and Overdrive options
-            rcc.apb1enr.modify(|_, w| w.pwren().set_bit());
+            rcc.apb1enr().modify(|_, w| w.pwren().set_bit());
 
-            pwr.cr1.modify(|_, w| match config.vos_scale {
+            pwr.cr1().modify(|_, w| match config.vos_scale {
                 VOSscale::PwrScale3 => w.vos().scale3(),
                 VOSscale::PwrScale2 => w.vos().scale2(),
                 VOSscale::PwrScale1 => w.vos().scale1(),
             });
 
             // Enable PLL
-            rcc.cr.modify(|_, w| w.pllon().on());
+            rcc.cr().modify(|_, w| w.pllon().on());
 
             // Wait for PLL to stabilise
-            while rcc.cr.read().pllrdy().is_not_ready() {}
+            while rcc.cr().read().pllrdy().is_not_ready() {}
 
             //Over-drive
             if config.overdrive {
                 // Entering Over-drive mode
                 //enable the Over-drive mode
-                pwr.cr1.modify(|_, w| w.oden().set_bit());
+                pwr.cr1().modify(|_, w| w.oden().set_bit());
 
                 //wait for the ODRDY flag to be set
-                while !pwr.csr1.read().odrdy().bit_is_set() {}
+                while !pwr.csr1().read().odrdy().bit_is_set() {}
 
                 //switch the voltage regulator from Normal mode to Over-drive mode
-                pwr.cr1.modify(|_, w| w.odswen().set_bit());
+                pwr.cr1().modify(|_, w| w.odswen().set_bit());
 
                 //Wait for the ODSWRDY flag in the PWR_CSR1 to be set.
-                while !pwr.csr1.read().odswrdy().bit_is_set() {}
+                while !pwr.csr1().read().odswrdy().bit_is_set() {}
             }
         }
 
@@ -1096,17 +1100,21 @@ impl CFGR {
         if self.lse.is_some() {
             // Configure the LSE mode
             match self.lse.as_ref().unwrap().mode {
-                LSEClockMode::Bypass => rcc.bdcr.modify(|_, w| w.lsebyp().bypassed()),
-                LSEClockMode::Oscillator => rcc.bdcr.modify(|_, w| w.lsebyp().not_bypassed()),
+                LSEClockMode::Bypass => {
+                    rcc.bdcr().modify(|_, w| w.lsebyp().bypassed());
+                }
+                LSEClockMode::Oscillator => {
+                    rcc.bdcr().modify(|_, w| w.lsebyp().not_bypassed());
+                }
             }
             // Enable the LSE.
-            rcc.bdcr.modify(|_, w| w.lseon().on());
-            while rcc.bdcr.read().lserdy().is_not_ready() {}
+            rcc.bdcr().modify(|_, w| w.lseon().on());
+            while rcc.bdcr().read().lserdy().is_not_ready() {}
         }
 
         if self.lsi.is_some() {
-            rcc.csr.modify(|_, w| w.lsion().on());
-            while rcc.csr.read().lsirdy().is_not_ready() {}
+            rcc.csr().modify(|_, w| w.lsion().on());
+            while rcc.csr().read().lsirdy().is_not_ready() {}
         }
 
         if self.use_pllsai {
@@ -1129,18 +1137,22 @@ impl CFGR {
             assert!((192_000_000..=432_000_000).contains(&pllsain_freq));
             assert!(pllsaip_freq <= 48_000_000);
 
-            rcc.pllsaicfgr.modify(|_, w| unsafe {
+            rcc.pllsaicfgr().modify(|_, w| unsafe {
                 w.pllsain().bits(self.pllsain);
                 w.pllsaip().bits(self.pllsaip as u8);
                 w.pllsaiq().bits(self.pllsaiq)
             });
-            rcc.cr.modify(|_, w| w.pllsaion().on());
+            rcc.cr().modify(|_, w| w.pllsaion().on());
         }
 
         if let Some(pll48clk) = self.pll48clk {
             match pll48clk {
-                PLL48CLK::Pllq => rcc.dckcfgr2.modify(|_, w| w.ck48msel().bit(false)),
-                PLL48CLK::Pllsai => rcc.dckcfgr2.modify(|_, w| w.ck48msel().bit(true)),
+                PLL48CLK::Pllq => {
+                    rcc.dckcfgr2().modify(|_, w| w.ck48msel().bit(false));
+                }
+                PLL48CLK::Pllsai => {
+                    rcc.dckcfgr2().modify(|_, w| w.ck48msel().bit(true));
+                }
             }
         }
 
@@ -1156,15 +1168,15 @@ impl CFGR {
             assert!(plli2sr_freq <= 216_000_000);
             assert!(plli2sq_freq <= 216_000_000);
 
-            rcc.plli2scfgr.modify(|_, w| unsafe {
+            rcc.plli2scfgr().modify(|_, w| unsafe {
                 w.plli2sn().bits(self.plli2sn);
                 w.plli2sr().bits(self.plli2sr);
                 w.plli2sq().bits(self.plli2sq)
             });
-            rcc.cr.modify(|_, w| w.plli2son().on());
+            rcc.cr().modify(|_, w| w.plli2son().on());
         }
 
-        rcc.cfgr.modify(|_, w| {
+        rcc.cfgr().modify(|_, w| {
             w.mco1()
                 .variant(self.mco1.into())
                 .mco1pre()
@@ -1176,11 +1188,11 @@ impl CFGR {
         });
 
         flash
-            .acr
-            .write(|w| w.latency().bits(config.flash_waitstates));
+            .acr()
+            .write(|w| unsafe { w.latency().bits(config.flash_waitstates) });
 
         // Configure HCLK, PCLK1, PCLK2
-        rcc.cfgr.modify(|_, w| unsafe {
+        rcc.cfgr().modify(|_, w| unsafe {
             w.ppre1()
                 .bits(config.ppre1)
                 .ppre2()
@@ -1191,14 +1203,14 @@ impl CFGR {
 
         // Select SYSCLK source
         if self.use_pll {
-            rcc.cfgr.modify(|_, w| w.sw().pll());
-            while !rcc.cfgr.read().sws().is_pll() {}
+            rcc.cfgr().modify(|_, w| w.sw().pll());
+            while !rcc.cfgr().read().sws().is_pll() {}
         } else if self.hse.is_some() {
-            rcc.cfgr.modify(|_, w| w.sw().hse());
-            while !rcc.cfgr.read().sws().is_hse() {}
+            rcc.cfgr().modify(|_, w| w.sw().hse());
+            while !rcc.cfgr().read().sws().is_hse() {}
         } else {
-            rcc.cfgr.modify(|_, w| w.sw().hsi());
-            while !rcc.cfgr.read().sws().is_hsi() {}
+            rcc.cfgr().modify(|_, w| w.sw().hsi());
+            while !rcc.cfgr().read().sws().is_hsi() {}
         }
 
         // As requested by user manual we need to wait 16 ticks before the right
@@ -1388,7 +1400,7 @@ impl BusTimerClock for APB2 {
     }
 }
 
-impl From<MCO1> for crate::pac::rcc::cfgr::MCO1_A {
+impl From<MCO1> for crate::pac::rcc::cfgr::MCO1 {
     fn from(input: MCO1) -> Self {
         match input {
             MCO1::Hsi => Self::Hsi,
@@ -1399,7 +1411,7 @@ impl From<MCO1> for crate::pac::rcc::cfgr::MCO1_A {
     }
 }
 
-impl From<MCO2> for crate::pac::rcc::cfgr::MCO2_A {
+impl From<MCO2> for crate::pac::rcc::cfgr::MCO2 {
     fn from(input: MCO2) -> Self {
         match input {
             MCO2::Sysclk => Self::Sysclk,
@@ -1410,7 +1422,7 @@ impl From<MCO2> for crate::pac::rcc::cfgr::MCO2_A {
     }
 }
 
-impl From<MCOPRE> for crate::pac::rcc::cfgr::MCO2PRE_A {
+impl From<MCOPRE> for crate::pac::rcc::cfgr::MCO1PRE {
     fn from(input: MCOPRE) -> Self {
         match input {
             MCOPRE::Div1_no_div => Self::Div1,

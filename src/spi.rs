@@ -307,7 +307,7 @@ macro_rules! impl_instance {
                 fn configure<Word>(&self, br: u8, cpol: bool, cpha: bool)
                     where Word: SupportedWordSize
                 {
-                    self.cr2.write(|w| {
+                    self.cr2().write(|w| {
                         // Data size
                         //
                         // This is safe, as `Word::ds` returns an enum which can
@@ -334,7 +334,7 @@ macro_rules! impl_instance {
                             .rxdmaen().enabled()
                     });
 
-                    self.cr1.write(|w|
+                    self.cr1().write(|w| unsafe {
                         w
                             // Use two lines for MISO/MOSI
                             .bidimode().unidirectional()
@@ -357,11 +357,11 @@ macro_rules! impl_instance {
                             .cpha().bit(cpha)
                             // Enable SPI
                             .spe().enabled()
-                    );
+                    });
                 }
 
                 fn read<Word>(&self) -> nb::Result<Word, Error> {
-                    let sr = self.sr.read();
+                    let sr = self.sr().read();
 
                     // Check for errors
                     //
@@ -396,7 +396,7 @@ macro_rules! impl_instance {
                 }
 
                 fn send<Word>(&self, word: Word) -> nb::Result<(), Error> {
-                    let sr = self.sr.read();
+                    let sr = self.sr().read();
 
                     // Check for errors
                     //
@@ -434,7 +434,7 @@ macro_rules! impl_instance {
                 }
 
                 fn dr_address(&self) -> u32 {
-                    core::ptr::addr_of!(self.dr) as u32
+                    self.dr().as_ptr() as u32
                 }
             }
 
@@ -751,29 +751,29 @@ where
 pub struct Enabled<Word>(PhantomData<Word>);
 
 pub trait SupportedWordSize: dma::SupportedWordSize + private::Sealed {
-    fn frxth() -> cr2::FRXTH_A;
-    fn ds() -> cr2::DS_A;
+    fn frxth() -> cr2::FRXTH;
+    fn ds() -> cr2::DS;
 }
 
 impl private::Sealed for u8 {}
 impl SupportedWordSize for u8 {
-    fn frxth() -> cr2::FRXTH_A {
-        cr2::FRXTH_A::Quarter
+    fn frxth() -> cr2::FRXTH {
+        cr2::FRXTH::Quarter
     }
 
-    fn ds() -> cr2::DS_A {
-        cr2::DS_A::EightBit
+    fn ds() -> cr2::DS {
+        cr2::DS::EightBit
     }
 }
 
 impl private::Sealed for u16 {}
 impl SupportedWordSize for u16 {
-    fn frxth() -> cr2::FRXTH_A {
-        cr2::FRXTH_A::Half
+    fn frxth() -> cr2::FRXTH {
+        cr2::FRXTH::Half
     }
 
-    fn ds() -> cr2::DS_A {
-        cr2::DS_A::SixteenBit
+    fn ds() -> cr2::DS {
+        cr2::DS::SixteenBit
     }
 }
 

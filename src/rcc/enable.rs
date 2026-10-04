@@ -163,7 +163,7 @@ bus! {
     SAI2 => (APB2, sai2en, sai2lpen, sai2rst), // 23
 }
 
-#[cfg(any(feature = "svd-f730", feature = "svd-f7x2", feature = "svd-f7x3",))]
+#[cfg(feature = "svd-f730")]
 bus! {
     AES => (AHB2, aesen, aeslpen, aesrst), // 4
 
@@ -198,7 +198,7 @@ bus! {
     LTDC => (APB2, ltdcen, ltdclpen, ltdcrst), // 26
 }
 
-#[cfg(any(feature = "svd-f765", feature = "svd-f7x7", feature = "svd-f7x9"))]
+#[cfg(any(feature = "svd-f7x7", feature = "svd-f7x9"))]
 bus! {
     JPEG => (AHB2, jpegen, jpeglpen,), // 1
 
@@ -211,9 +211,4 @@ bus! {
 #[cfg(any(feature = "svd-f7x9", feature = "svd-f7x9"))]
 bus! {
     DFSDM => (APB2, dfsdm1en, dfsdm1lpen, dfsdm1rst), // 29
-}
-
-#[cfg(feature = "svd-f765")]
-bus! {
-    DFSDM1 => (APB2, dfsdm1en, dfsdm1lpen, dfsdm1rst), // 29
 }

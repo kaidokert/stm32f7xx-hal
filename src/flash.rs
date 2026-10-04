@@ -39,23 +39,27 @@ impl Flash {
             return;
         }
 
-        self.registers.keyr.write(|w| w.key().bits(0x45670123));
-        self.registers.keyr.write(|w| w.key().bits(0xCDEF89AB));
+        self.registers
+            .keyr()
+            .write(|w| unsafe { w.key().bits(0x45670123) });
+        self.registers
+            .keyr()
+            .write(|w| unsafe { w.key().bits(0xCDEF89AB) });
     }
 
     /// Locks the flash memory.
     pub fn lock(&mut self) {
-        self.registers.cr.modify(|_, w| w.lock().set_bit());
+        self.registers.cr().modify(|_, w| w.lock().set_bit());
     }
 
     /// Returns `true` if the flash memory is locked.
     fn is_locked(&self) -> bool {
-        self.registers.cr.read().lock().is_locked()
+        self.registers.cr().read().lock().is_locked()
     }
 
     /// Returns `true` if a flash operation is in progress.
     fn is_busy(&self) -> bool {
-        self.registers.sr.read().bsy().bit_is_set()
+        self.registers.sr().read().bsy().bit_is_set()
     }
 
     /// Starts a sector erase sequence.
@@ -128,7 +132,7 @@ impl Flash {
 
     /// Checks the error flags.
     fn check_errors(&self) -> Result<(), Error> {
-        let sr = self.registers.sr.read();
+        let sr = self.registers.sr().read();
 
         if sr.erserr().bit_is_set() {
             Err(Error::EraseSequence)
@@ -145,15 +149,15 @@ impl Flash {
 
     /// Clears all error flags.
     fn clear_errors(&mut self) {
-        self.registers.sr.write(|w| {
+        self.registers.sr().write(|w| {
             w.erserr()
-                .set_bit()
+                .clear()
                 .pgperr()
-                .set_bit()
+                .clear()
                 .pgaerr()
-                .set_bit()
+                .clear()
                 .wrperr()
-                .set_bit()
+                .clear()
         });
     }
 }
@@ -171,7 +175,7 @@ impl<'a> EraseSequence<'a> {
 
         //TODO: This should check if sector_number is valid for this device
 
-        flash.registers.cr.modify(|_, w| unsafe {
+        flash.registers.cr().modify(|_, w| unsafe {
             #[cfg(any(
                 feature = "stm32f765",
                 feature = "stm32f767",
@@ -192,7 +196,7 @@ impl<'a> EraseSequence<'a> {
             w.mer().clear_bit();
             w.ser().set_bit().snb().bits(sector_number)
         });
-        flash.registers.cr.modify(|_, w| w.strt().start());
+        flash.registers.cr().modify(|_, w| w.strt().start());
 
         Ok(Self { flash })
     }
@@ -202,7 +206,7 @@ impl<'a> EraseSequence<'a> {
         flash.check_locked_or_busy()?;
         flash.clear_errors();
 
-        flash.registers.cr.modify(|_, w| {
+        flash.registers.cr().modify(|_, w| {
             #[cfg(any(
                 feature = "stm32f765",
                 feature = "stm32f767",
@@ -224,7 +228,7 @@ impl<'a> EraseSequence<'a> {
             w.ser().clear_bit()
         });
 
-        flash.registers.cr.modify(|_, w| w.strt().start());
+        flash.registers.cr().modify(|_, w| w.strt().start());
 
         Ok(Self { flash })
     }
@@ -256,7 +260,7 @@ impl<'a, 'b> ProgrammingSequence<'a, 'b> {
 
         flash
             .registers
-            .cr
+            .cr()
             .modify(|_, w| w.psize().psize8().pg().set_bit());
 
         let address = unsafe { FLASH_BASE.add(start_offset) };
@@ -276,7 +280,7 @@ impl<'a, 'b> ProgrammingSequence<'a, 'b> {
 
         if let Err(error) = self.flash.check_errors() {
             // make sure programing mode is disabled when an error occurred
-            self.flash.registers.cr.modify(|_, w| w.pg().clear_bit());
+            self.flash.registers.cr().modify(|_, w| w.pg().clear_bit());
 
             return Err(error.into());
         }
@@ -296,7 +300,7 @@ impl<'a, 'b> ProgrammingSequence<'a, 'b> {
 
             Err(nb::Error::WouldBlock)
         } else {
-            self.flash.registers.cr.modify(|_, w| w.pg().clear_bit());
+            self.flash.registers.cr().modify(|_, w| w.pg().clear_bit());
 
             Ok(())
         }
